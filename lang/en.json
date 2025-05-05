@@ -1,0 +1,18 @@
+{
+	"PrintChatToPlayer.Revive.Not.Allowed.Flag": "{lime}[Revive Players] {darkred}You Dont Have Permission To Revive",
+	"PrintChatToPlayer.Revive.Not.Allowed.Limit": "{lime}[Revive Players] {grey}You Pass The Limit Of Revive [Revive Remaining {lime}{0}{grey}]",
+	"PrintChatToPlayer.Revive.Not.Allowed.Money": "{lime}[Revive Players] {grey}You Dont Have Enough Money To Revive, You Need {lime}${0} {grey}To Revive",
+	"PrintChatToPlayer.Revive.Not.Allowed.Health": "{lime}[Revive Players] {grey}You Dont Have Enough Health To Revive, You Need {lime}{0} {grey}To Revive",
+	"PrintChatToPlayer.Revive.Too.Far": "{lime}[Revive Players] {grey}Cant Find Dead Player Or You're too far from a revive target {darkred}(Max {0} units)",
+	"PrintChatToPlayer.Revive.While.OnCooldown": "{lime}[Revive Players] {grey}You Are On Cooldown. Please Wait {yellow}{0} Seconds.",
+
+	"PrintChatToPlayer.Revived.Limit": "{grey}[Revive Remaining {lime}{0}{grey}]",
+	"PrintChatToPlayer.Revived.Money": "{darkred}-${0}",
+	"PrintChatToPlayer.Revived.Health": "{darkred}-{0} Health",
+	"PrintChatToPlayer.Revived.By": "{lime}[Revive Players] {grey}You Were Revived By {purple}{0}",
+	"PrintChatToPlayer.Revived.Completed": "{lime}[Revive Players] {grey}You Revived {0} {1} {2}",
+	"PrintChatToAllPlayers.Revived.Completed": "{lime}[Revive Players] {purple}{0} {grey}Revived {purple}{1}",
+
+	"PrintCenterToPlayer.Revive.Player": "<font color='#ff00fe'>Hold <font color='#0cff00'>E <font color='#ff00fe'>To Revive <font color='#006fff'>{0}",
+	"PrintCenterToPlayer.Reviving": "<font color='white'>Reviving... <font color='#99ff66'>{0} <font color='#33cc33'>'s"
+}
