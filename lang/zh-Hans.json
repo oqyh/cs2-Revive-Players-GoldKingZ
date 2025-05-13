@@ -1,0 +1,30 @@
+{
+    //==========================
+    //        颜色
+    //==========================
+    //{黄色（Yellow）} {金色（Gold）} {银色（Silver）} {蓝色（Blue）} {深蓝色（DarkBlue）} {蓝灰色（BlueGrey）} {洋红色（Magenta）} {浅红色（LightRed）}
+    //{浅蓝色（LightBlue）} {橄榄色（Olive）} {酸橙色（Lime）} {红色（Red）} {紫色（Purple）} {灰色（Grey）}
+    //{默认（Default）} {白色（White）} {深红色（Darkred）} {绿色（Green）} {浅黄色（LightYellow）}
+    //==========================
+    //        其他
+    //==========================
+    //{nextline} = 在下一行打印
+    //==========================
+
+    "PrintChatToPlayer.Revive.Not.Allowed.Flag": "{lime}[复活玩家] {darkred}你没有权限进行复活",
+    "PrintChatToPlayer.Revive.Not.Allowed.Limit": "{lime}[复活玩家] {grey}你已达到复活次数限制 [剩余复活次数 {lime}{0}{grey}]", //{0} = 复活次数达到上限
+    "PrintChatToPlayer.Revive.Not.Allowed.Money": "{lime}[复活玩家] {grey}你没有足够的钱进行复活，你需要 {lime}${0} {grey}才能复活", //{0} = 需要的金钱成本
+    "PrintChatToPlayer.Revive.Not.Allowed.Health": "{lime}[复活玩家] {grey}你没有足够的生命值进行复活，你需要 {lime}{0} {grey}才能复活", //{0} = 需要的生命值成本
+    "PrintChatToPlayer.Revive.Too.Far": "{lime}[复活玩家] {grey}找不到死亡玩家或者你离复活目标太远了 {darkred}(最大距离 {0} 单位)", //{0} = 需要的最大距离
+    "PrintChatToPlayer.Revive.While.OnCooldown": "{lime}[复活玩家] {grey}你正在冷却中。请等待 {yellow}{0} 秒。", //{0} = 剩余冷却时间
+
+    "PrintChatToPlayer.Revived.Limit": "{grey}[剩余复活次数 {lime}{0}{grey}]", //{0} = 剩余复活次数
+    "PrintChatToPlayer.Revived.Money": "{darkred}-${0}", //{0} = 扣除的金钱数量
+    "PrintChatToPlayer.Revived.Health": "{darkred}-{0} 生命值", //{0} = 扣除的生命值数量
+    "PrintChatToPlayer.Revived.By": "{lime}[复活玩家] {grey}你被 {purple}{0} 复活了", //{0} = 复活者姓名
+    "PrintChatToPlayer.Revived.Completed": "{lime}[复活玩家] {grey}你复活了 {0} {1} {2}", //{0} = 死亡玩家姓名 || {1} = "PrintChatToPlayer.Revived.Money" 或 "PrintChatToPlayer.Revived.Health" || {2} = "PrintChatToPlayer.Revived.Limit"
+    "PrintChatToAllPlayers.Revived.Completed": "{lime}[复活玩家] {purple}{0} {grey}复活了 {purple}{1}", //{0} = 死亡玩家姓名 || {1} = 复活者姓名 || {2} = "PrintChatToPlayer.Revived.Money" 或 "PrintChatToPlayer.Revived.Health" || {3} = "PrintChatToPlayer.Revived.Limit"
+
+    "PrintCenterToPlayer.Revive.Player": "<font color='#ff00fe'>按住 <font color='#0cff00'>E <font color='#ff00fe'>复活 <font color='#006fff'>{0}", // {0} = 死亡玩家姓名
+    "PrintCenterToPlayer.Reviving": "<font color='white'>正在复活... <font color='#99ff66'>{0} <font color='#33cc33'>的" // {0} = 按住使用键的时间
+}
