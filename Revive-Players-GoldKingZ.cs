@@ -39,10 +39,9 @@ public class MainPlugin : BasePlugin
 
         RegisterListener<Listeners.CheckTransmit>(OnCheckTransmit);
         RegisterListener<Listeners.OnServerPrecacheResources>(OnServerPrecacheResources);
+        RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
         RegisterListener<Listeners.OnTick>(OnTick);
-
-        VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Hook(OnTakeDamage, HookMode.Pre);
 
         if(hotReload)
         {
@@ -389,13 +388,19 @@ public class MainPlugin : BasePlugin
         if (@event == null)return HookResult.Continue;
 
         g_Main.Disable_Revive = true;
-        
+
         return HookResult.Continue;
+    }
+
+    public void OnMapStart(string mapName)
+    {
+        VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Hook(OnTakeDamage, HookMode.Pre);
     }
 
     public void OnMapEnd()
     {
         Helper.ClearVariables();
+        VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Unhook(OnTakeDamage, HookMode.Pre);
     }
 
     public override void Unload(bool hotReload)
