@@ -247,6 +247,11 @@ public class MainPlugin : BasePlugin
             
             if (!player.IsValid(true) || !player.PawnIsAlive) continue;
 
+            if (player.PlayerPawn?.Value?.MoveType == MoveType_t.MOVETYPE_LADDER)
+            {
+                continue;
+            }
+
             if (player.Buttons == 0)
             {
                 playerData.ButtonReady = true;
