@@ -20,7 +20,7 @@ namespace Revive_Players;
 public class MainPlugin : BasePlugin
 {
     public override string ModuleName => "Allow To Revive Players With Flags";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.0.1";
     public override string ModuleAuthor => "Gold KingZ";
     public override string ModuleDescription => "https://github.com/oqyh";
     public static MainPlugin Instance { get; set; } = new();
@@ -31,6 +31,7 @@ public class MainPlugin : BasePlugin
         Instance = this;
         Configs.Load(ModuleDirectory);
 
+        RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         RegisterEventHandler<EventPlayerSpawn>(OnEventPlayerSpawn);
         RegisterEventHandler<EventPlayerDeath>(OnEventPlayerDeath);
         RegisterEventHandler<EventBotTakeover>(OnEventBotTakeover);
@@ -225,7 +226,7 @@ public class MainPlugin : BasePlugin
         foreach (var entry in g_Main.DeadPlayer_Data)
         {
             var data = entry.Value;
-            if(!data.Dead_Player.IsValid(true))continue;
+            if (!data.Dead_Player.IsValid(true)) continue;
             data.Dead_Player_Team = data.Dead_Player.TeamNum;
 
             if (data.Dead_Player.TeamNum != data.Dead_Player_Team)
@@ -233,10 +234,8 @@ public class MainPlugin : BasePlugin
                 Helper.RemoveBeams(data.Dead_Player);
                 continue;
             }
-
+            
             Helper.UpdateVerticalLineBeam(data);
-            Helper.UpdateReviveCircle(data);
-            Helper.UpdateWorldText(data);
         }
         
         
@@ -245,7 +244,9 @@ public class MainPlugin : BasePlugin
             var player = entry.Key;
             var playerData = entry.Value;
             
-            if (!player.IsValid(true) || !player.PawnIsAlive) continue;
+            if (!player.IsValid(true) || !player.PawnIsAlive || player.PlayerPawn?.Value?.Flags == 65664
+            || player.PlayerPawn?.Value?.Flags == 65672 || player.Pawn?.Value?.Flags == 65664
+            || player.Pawn?.Value?.Flags == 65672) continue;
 
             if (player.Buttons == 0)
             {
@@ -274,9 +275,9 @@ public class MainPlugin : BasePlugin
                     if (target != null && target.TeamNum == player.TeamNum)
                     {
                         float maxDist = Configs.GetConfigData().Revive_Distance;
-                        float warnOutside = maxDist * maxDist;
+                        float warnDist = maxDist * 1.5f;
                         
-                        if (distance > maxDist && distance <= warnOutside)
+                        if (distance <= warnDist && distance >= maxDist)
                         {
                             if (!Helper.CanPlayerRevive(player, playerData, true))
                             {
@@ -295,7 +296,7 @@ public class MainPlugin : BasePlugin
                             Helper.ResetPlayer(player);
                             continue;
                         }
-                        else if (distance <= maxDist)
+                        else if (distance < maxDist)
                         {
                             if (!Helper.CanPlayerRevive(player, playerData))
                             {
@@ -362,7 +363,7 @@ public class MainPlugin : BasePlugin
                 Helper.ResetPlayer(player);
 
                 var (target, distance) = Helper.FindReviveTarget(player);
-                if (target != null && target.TeamNum == player.TeamNum && distance <= Configs.GetConfigData().Revive_Distance)
+                if (target != null && distance <= Configs.GetConfigData().Revive_Distance)
                 {
                     StringBuilder builder = new StringBuilder();
                     string centermessage = Localizer[$"PrintCenterToPlayer.Revive.Player", target.PlayerName];
@@ -393,6 +394,18 @@ public class MainPlugin : BasePlugin
         return HookResult.Continue;
     }
 
+    public HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+    {
+        if (@event == null) return HookResult.Continue;
+
+        var player = @event.Userid;
+        if (!player.IsValid(true)) return HookResult.Continue;
+
+        Helper.RemoveBeams(player);
+
+        return HookResult.Continue;
+    }
+
     public void OnMapEnd()
     {
         Helper.ClearVariables();
@@ -409,7 +422,6 @@ public class MainPlugin : BasePlugin
     public void Test(CCSPlayerController? player, CommandInfo commandInfo)
     {
         if (!player.IsValid()) return;
-
     } */
     
 }

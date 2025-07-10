@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Text.Encodings.Web;
 using System.Reflection;
 using System.Text;
 
@@ -62,6 +63,7 @@ namespace Revive_Players.Config
             WriteIndented = true,
             AllowTrailingCommas = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         public static bool IsLoaded()
@@ -75,7 +77,7 @@ namespace Revive_Players.Config
             {
                 throw new Exception("Config not yet loaded.");
             }
-            
+
             return _configData;
         }
 
@@ -86,29 +88,77 @@ namespace Revive_Players.Config
             {
                 Directory.CreateDirectory(configFileDirectory);
             }
+
             _PrecacheResources = Path.Combine(configFileDirectory, PrecacheResources);
             Helper.CreateResource(_PrecacheResources);
-
+            
             _configFilePath = Path.Combine(configFileDirectory, ConfigFileName);
+            var defaultConfig = new ConfigData();
             if (File.Exists(_configFilePath))
             {
-                _configData = JsonSerializer.Deserialize<ConfigData>(File.ReadAllText(_configFilePath), SerializationOptions);
+                try
+                {
+                    _configData = JsonSerializer.Deserialize<ConfigData>(File.ReadAllText(_configFilePath), SerializationOptions);
+                }
+                catch (JsonException)
+                {
+                    _configData = MergeConfigWithDefaults(_configFilePath, defaultConfig);
+                }
+                
                 _configData!.Validate();
             }
             else
             {
-                _configData = new ConfigData();
+                _configData = defaultConfig;
                 _configData.Validate();
             }
 
-            if (_configData is null)
-            {
-                throw new Exception("Failed to load configs.");
-            }
-
             SaveConfigData(_configData);
-            
             return _configData;
+        }
+
+        private static ConfigData MergeConfigWithDefaults(string path, ConfigData defaults)
+        {
+            var mergedConfig = new ConfigData();
+            var jsonText = File.ReadAllText(path);
+            
+            var readerOptions = new JsonReaderOptions 
+            { 
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip 
+            };
+
+            using var doc = JsonDocument.Parse(jsonText, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+            
+            foreach (var jsonProp in doc.RootElement.EnumerateObject())
+            {
+                var propInfo = typeof(ConfigData).GetProperty(jsonProp.Name);
+                if (propInfo == null) continue;
+
+                try
+                {
+                    var jsonValue = JsonSerializer.Deserialize(
+                        jsonProp.Value.GetRawText(), 
+                        propInfo.PropertyType,
+                        new JsonSerializerOptions
+                        {
+                            Converters = { new JsonStringEnumConverter() },
+                            ReadCommentHandling = JsonCommentHandling.Skip
+                        }
+                    );
+                    propInfo.SetValue(mergedConfig, jsonValue);
+                }
+                catch (JsonException)
+                {
+                    propInfo.SetValue(mergedConfig, propInfo.GetValue(defaults));
+                }
+            }
+            
+            return mergedConfig;
         }
 
         private static void SaveConfigData(ConfigData configData)
@@ -116,9 +166,8 @@ namespace Revive_Players.Config
             if (_configFilePath is null)
                 throw new Exception("Config not yet loaded.");
 
-            string json = JsonSerializer.Serialize(configData, SerializationOptions);
-            json = Regex.Unescape(json);
-
+            var json = JsonSerializer.Serialize(configData, SerializationOptions);
+            
             var lines = json.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
             var newLines = new List<string>();
 
@@ -280,13 +329,14 @@ namespace Revive_Players.Config
             public bool Revive_DontUnFreezeIfPlayerWasFreezed{ get; set; }
 
             [BreakLine("{space}----------------------------[ ↓ DeadBody Indicator Config ↓ ]----------------------------{space}")]
-            [Comment("Show Arrow On Dead Body?\ntrue = Yes\nfalse = No")]
-            public bool DeadBody_Arrow{ get; set; }
+            [Comment("Show Arrow On Dead Body?\n0 = No\n1 = Yes + No Animation\n2 = Yes + Animation (Warning Performance)")]
+            [Range(0, 2, 1, "[Revive Players] DeadBody_Arrow: is invalid, setting to default value (1) Please Choose From 0 To 2.\n[Revive Players] 0 = No\n[Revive Players] 1 = Yes + No Animation\n[Revive Players] 2 = Yes + Animation (Warning Performance)")]
+            public int DeadBody_Arrow{ get; set; }
 
-            [Comment("Required [DeadBody_Arrow = true]\nArrow Color Red,Green,Blue,Alpha = Can Be 1-255 or 0.01 to 1.0 (R , G , B, Optional A)\nUse This Site (https://rgbacolorpicker.com/) For Color Pick")]
+            [Comment("Required [DeadBody_Arrow > 0]\nArrow Color Red,Green,Blue,Alpha = Can Be 1-255 or 0.01 to 1.0 (R , G , B, Optional A)\nUse This Site (https://rgbacolorpicker.com/) For Color Pick")]
             public string DeadBody_Arrow_Color{ get; set; }
 
-            [Comment("Required [DeadBody_Arrow = true]\nMove Arrow From The Ground By")]
+            [Comment("Required [DeadBody_Arrow > 0]\nMove Arrow From The Ground By")]
             public float DeadBody_MoveArrow_From_Ground_By { get; set; }
 
             [Comment("Show Circle Radius On Dead Body?\ntrue = Yes\nfalse = No")]
@@ -345,7 +395,7 @@ namespace Revive_Players.Config
                 Revive_FreezeOnReviving = true;
                 Revive_DontUnFreezeIfPlayerWasFreezed = true;
 
-                DeadBody_Arrow = true;
+                DeadBody_Arrow = 1;
                 DeadBody_Arrow_Color = "120, 245, 27, 0.45";
                 DeadBody_MoveArrow_From_Ground_By = 90.0f;
                 DeadBody_CircleRadius = true;

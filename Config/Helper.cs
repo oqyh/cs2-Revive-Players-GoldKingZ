@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using CounterStrikeSharp.API.Modules.Commands;
 using System.Net.Http.Headers;
 using CounterStrikeSharp.API.Modules.Memory;
+using CounterStrikeSharp.API.Modules.Entities;
 
 namespace Revive_Players;
 
@@ -112,19 +113,131 @@ public class Helper
             Server.PrintToChatAll(message);
         }
     }
-    public static List<CCSPlayerController> GetPlayersController(bool IncludeBots = false, bool IncludeHLTV = false, bool IncludeNone = true, bool IncludeSPEC = true, bool IncludeCT = true, bool IncludeT = true) 
+    
+
+    public static bool IsPlayerInGroupPermission(CCSPlayerController player, string groups)
+    {
+        if (string.IsNullOrEmpty(groups) || player == null || !player.IsValid)return false;
+
+        return groups.Split('|')
+        .Select(segment => segment.Trim())
+        .Any(trimmedSegment => Permission_CheckPermissionSegment(player, trimmedSegment));
+    }
+    private static bool Permission_CheckPermissionSegment(CCSPlayerController player, string segment)
+    {
+        if (string.IsNullOrEmpty(segment))return false;
+
+        int colonIndex = segment.IndexOf(':');
+        if (colonIndex == -1 || colonIndex == 0)return false;
+
+        string prefix = segment.Substring(0, colonIndex).Trim().ToLower();
+        string values = segment.Substring(colonIndex + 1).Trim();
+
+        return prefix switch
+        {
+            "steamid" or "steamids" or "steam" or "steams" => Permission_CheckSteamIds(player, values),
+            "flag" or "flags" => Permission_CheckFlags(player, values),
+            "group" or "groups" => Permission_CheckGroups(player, values),
+            _ => false
+        };
+    }
+    private static bool Permission_CheckSteamIds(CCSPlayerController player, string steamIds)
+    {
+        steamIds = steamIds.Replace("[", "").Replace("]", "");
+
+        var (steam2, steam3, steam32, steam64) = player.SteamID.GetPlayerSteamID();
+        var steam3NoBrackets = steam3.Trim('[', ']');
+
+        return steamIds
+        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        .Select(id => id.Trim())
+        .Any(trimmedId =>
+            string.Equals(trimmedId, steam2, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmedId, steam3NoBrackets, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmedId, steam32, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmedId, steam64, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+    private static bool Permission_CheckFlags(CCSPlayerController player, string flags)
+    {
+        return flags.Split(',')
+        .Select(flag => flag.Trim())
+        .Where(trimmedFlag => trimmedFlag.StartsWith("@"))
+        .Any(trimmedFlag => MyPlayerHasPermissions(player, trimmedFlag));
+    }
+    private static bool Permission_CheckGroups(CCSPlayerController player, string groups)
+    {
+        return groups.Split(',')
+        .Select(group => group.Trim())
+        .Where(trimmedGroup => trimmedGroup.StartsWith("#"))
+        .Any(trimmedGroup => MyPlayerInGroup(player, trimmedGroup));
+    }
+    public static bool MyPlayerHasPermissions(CCSPlayerController player, params string[] flags)
+    {
+        if (player == null) return true;
+
+        if (!player.IsValid || player.Connected != PlayerConnectedState.PlayerConnected || player.IsBot || player.IsHLTV) return false;
+
+        var playerData = AdminManager.GetPlayerAdminData(player);
+        if (playerData == null) return false;
+
+        foreach (var domain in playerData.Flags)
+        {
+            if (string.IsNullOrEmpty(domain.Key)) continue;
+
+            var domainFlags = flags
+            .Where(flag => flag.StartsWith($"@{domain.Key}/"))
+            .ToArray();
+
+            if (domainFlags.Length == 0) continue;
+
+            if (!playerData.DomainHasFlags(domain.Key, domainFlags, true))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    public static bool MyPlayerInGroup(CCSPlayerController? player, params string[] groups)
+    {
+        if (player == null) return true;
+        
+        if (!player.IsValid || player.Connected != PlayerConnectedState.PlayerConnected || player.IsBot || player.IsHLTV)return false;
+        
+        return MyPlayerInGroup(player.AuthorizedSteamID, groups);
+    }
+    public static bool MyPlayerInGroup(SteamID? steamId, params string[] groups)
+    {
+        if (steamId == null)return false;
+
+        var playerData = AdminManager.GetPlayerAdminData(steamId);
+        if (playerData == null)return false;
+
+        var groupsToCheck = groups.ToHashSet();
+        foreach (var domain in playerData.Flags)
+        {
+            if (string.IsNullOrEmpty(domain.Key)) continue;
+
+            if (playerData.Flags[domain.Key].Contains("@" + domain.Key + "/*"))
+            {
+                groupsToCheck.ExceptWith(groups.Where(group => group.Contains(domain.Key + '/')));
+            }
+        }
+        return playerData.Groups.IsSupersetOf(groupsToCheck);
+    }
+    public static List<CCSPlayerController> GetPlayersController(bool IncludeBots = false, bool IncludeHLTV = false, bool IncludeNone = true, bool IncludeSPEC = true, bool IncludeCT = true, bool IncludeT = true)
     {
         return Utilities
             .FindAllEntitiesByDesignerName<CCSPlayerController>("cs_player_controller")
-            .Where(p => 
-                p != null && 
+            .Where(p =>
+                p != null &&
                 p.IsValid &&
                 p.Connected == PlayerConnectedState.PlayerConnected &&
                 (IncludeBots || !p.IsBot) &&
                 (IncludeHLTV || !p.IsHLTV) &&
-                ((IncludeCT && p.TeamNum == (byte)CsTeam.CounterTerrorist) || 
-                (IncludeT && p.TeamNum == (byte)CsTeam.Terrorist) || 
-                (IncludeNone && p.TeamNum == (byte)CsTeam.None) || 
+                ((IncludeCT && p.TeamNum == (byte)CsTeam.CounterTerrorist) ||
+                (IncludeT && p.TeamNum == (byte)CsTeam.Terrorist) ||
+                (IncludeNone && p.TeamNum == (byte)CsTeam.None) ||
                 (IncludeSPEC && p.TeamNum == (byte)CsTeam.Spectator)))
             .ToList();
     }
@@ -142,66 +255,7 @@ public class Helper
         );
     }
 
-    public static bool IsPlayerInGroupPermission(CCSPlayerController player, string groups)
-    {
-        if (string.IsNullOrEmpty(groups) || player == null || !player.IsValid)
-            return false;
-
-        return groups.Split('|')
-            .Select(segment => segment.Trim())
-            .Any(trimmedSegment => Permission_CheckPermissionSegment(player, trimmedSegment));
-    }
-
-    private static bool Permission_CheckPermissionSegment(CCSPlayerController player, string segment)
-    {
-        if (string.IsNullOrEmpty(segment))return false;
-
-        int colonIndex = segment.IndexOf(':');
-        if (colonIndex <= 0)return AdminManager.PlayerInGroup(player, segment);
-
-        string prefix = segment.Substring(0, colonIndex).Trim().ToLower();
-        string values = segment.Substring(colonIndex + 1).Trim();
-
-        return prefix switch
-        {
-            "steamid" or "steamids" or "steam" or "steams" => Permission_CheckSteamIds(player, values),
-            "flag" or "flags" => Permission_CheckFlags(player, values),
-            "group" or "groups" => Permission_CheckGroups(player, values),
-            _ => AdminManager.PlayerInGroup(player, segment)
-        };
-    }
-
-    private static bool Permission_CheckSteamIds(CCSPlayerController player, string steamIds)
-    {
-        if (player.AuthorizedSteamID == null)return false;
-
-        return steamIds.Split(',')
-            .Select(id => id.Trim())
-            .Any(trimmedId => Permission_IsMatchingSteamId(player.AuthorizedSteamID, trimmedId));
-    }
-
-    private static bool Permission_IsMatchingSteamId(CounterStrikeSharp.API.Modules.Entities.SteamID authId, string inputId)
-    {
-        return inputId.Equals(authId.SteamId2.ToString(), StringComparison.OrdinalIgnoreCase) ||
-               inputId.Equals(authId.SteamId3.ToString().Trim('[', ']'), StringComparison.OrdinalIgnoreCase) ||
-               inputId.Equals(authId.SteamId3.ToString(), StringComparison.OrdinalIgnoreCase) ||
-               inputId.Equals(authId.SteamId32.ToString(), StringComparison.OrdinalIgnoreCase) ||
-               inputId.Equals(authId.SteamId64.ToString(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool Permission_CheckFlags(CCSPlayerController player, string flags)
-    {
-        return flags.Split(',')
-            .Select(flag => flag.Trim())
-            .Any(trimmedFlag => AdminManager.PlayerHasPermissions(player, trimmedFlag));
-    }
-
-    private static bool Permission_CheckGroups(CCSPlayerController player, string groups)
-    {
-        return groups.Split(',')
-            .Select(group => group.Trim())
-            .Any(trimmedGroup => AdminManager.PlayerInGroup(player, trimmedGroup));
-    }
+    
     public static void ClearVariables()
     {
         var g_Main = MainPlugin.Instance.g_Main;
@@ -211,8 +265,8 @@ public class Helper
         g_Main.Revive_Limit_CT = 0;
         g_Main.Revive_Limit_T = 0;
 
-        g_Main.Player_Data.Clear();
-        g_Main.DeadPlayer_Data.Clear();
+        g_Main.Player_Data?.Clear();
+        g_Main.DeadPlayer_Data?.Clear();
     }
 
     public static void DebugMessage(string message, bool prefix = true)
@@ -368,14 +422,14 @@ public class Helper
         }
     }
 
-    public static float DistanceTo(Vector a, Vector b)
+    public static float DistanceTo(My_Vector a, My_Vector b)
     {
         return (float)Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2) + Math.Pow(a.Z - b.Z, 2));
     }
 
     public static void CheckPlayerInGlobals(CCSPlayerController player)
     {
-        if(!player.IsValid(true))return;
+        if (!player.IsValid(true)) return;
 
         if (!MainPlugin.Instance.g_Main.Player_Data.ContainsKey(player))
         {
@@ -450,120 +504,60 @@ public class Helper
 
     public static void UpdateVerticalLineBeam(Globals.DeadPlayerDataClass data)
     {
-        if (data == null || !data.Dead_Player.IsValid(true) || data.Dead_Player.IsAlive() || data.ArrowBeam.Count == 0 || data.LineBeam == null || !data.LineBeam.IsValid)return;
+        if (Configs.GetConfigData().DeadBody_Arrow != 2
+        || data == null
+        || !data.Dead_Player.IsValid(true)
+        || data.Dead_Player.IsAlive()
+        || data.ArrowBeam.Count == 0
+        || data.LineBeam == null
+        || !data.LineBeam.IsValid)
+        {
+            return;
+        }
 
-        float t      = (float)(DateTime.Now - data.LineBeam_Time).TotalSeconds;
+        float t = (float)(DateTime.Now - data.LineBeam_Time).TotalSeconds;
         float offset = MathF.Sin(t * 4f) * 70f;
+        
+        My_Vector basePos = data.Dead_Player.PlayerPawn.Value!.AbsOrigin!.ToMy_Vector();
+        basePos.Z += Configs.GetConfigData().DeadBody_MoveArrow_From_Ground_By + offset;
+        
+        My_Vector tip = basePos;
+        tip.Z += 50;
 
-        Vector basePos = new Vector(
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.X,
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.Y,
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.Z + Configs.GetConfigData().DeadBody_MoveArrow_From_Ground_By + offset
-        );
-        Vector tip = new Vector(
-            basePos.X,
-            basePos.Y,
-            basePos.Z + 50
-        );
-
-        data.LineBeam.Teleport(basePos);
+        data.LineBeam.My_Teleport(position: basePos);
         data.LineBeam.EndPos.X = tip.X;
         data.LineBeam.EndPos.Y = tip.Y;
         data.LineBeam.EndPos.Z = tip.Z;
         Utilities.SetStateChanged(data.LineBeam, "CBeam", "m_vecEndPos");
-
-        const float wingSpread = 20f;
-        const float wingDrop   = 20f;
-        var dirs = new[] {
-            new Vector( wingSpread, 0, +wingDrop),
-            new Vector(-wingSpread, 0, +wingDrop)
-        };
-
+        
         for (int i = 0; i < data.ArrowBeam.Count; i++)
         {
             var wing = data.ArrowBeam[i];
             if (wing == null || !wing.IsValid) continue;
 
-            var d = dirs[i];
-            wing.Teleport(basePos);
-            wing.EndPos.X = basePos.X + d.X;
-            wing.EndPos.Y = basePos.Y + d.Y;
-            wing.EndPos.Z = basePos.Z + d.Z;
+            float xOffset = (i == 0) ? cons_wing : -cons_wing;
+            
+            wing.My_Teleport(position: basePos);
+            wing.EndPos.X = basePos.X + xOffset;
+            wing.EndPos.Y = basePos.Y;
+            wing.EndPos.Z = basePos.Z + cons_wing;
             Utilities.SetStateChanged(wing, "CBeam", "m_vecEndPos");
         }
-    }
-
-    public static void UpdateWorldText(Globals.DeadPlayerDataClass data)
-    {
-        if (data == null || !data.Dead_Player.IsValid(true) || data.Dead_Player.IsAlive() || data.PointWorldTextPoint == null || !data.PointWorldTextPoint.IsValid)return;
-
-        float zOffset = Configs.GetConfigData().DeadBody_MovePlayerNameText_From_Ground_By;
-        var newPos = new Vector(
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.X,
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.Y,
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.Z + zOffset
-        );
         
-        var currentAngles = new QAngle(0, 90, 90);
-        data.PointWorldTextPoint.Teleport(newPos, currentAngles);
     }
-
-    public static void UpdateReviveCircle(Globals.DeadPlayerDataClass data)
-    {
-        if (data == null || !data.Dead_Player.IsValid(true) || data.Dead_Player.IsAlive() || data.CircleBeam.Count == 0)return;
-
-
-        float radius  = Configs.GetConfigData().Revive_Distance;
-        float zOffset = 10.0f;
-        Vector center = new Vector(
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.X,
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.Y,
-            data.Dead_Player.PlayerPawn?.Value?.AbsOrigin?.Z + zOffset
-        );
-
-        int segmentCount = data.CircleBeam.Count;
-        double deltaAng  = 2 * Math.PI / segmentCount;
-
-        for (int i = 0; i < segmentCount; i++)
-        {
-            var beam = data.CircleBeam[i];
-            if (beam == null || !beam.IsValid)continue;
-
-            double a1 = i * deltaAng;
-            double a2 = (i + 1) * deltaAng;
-
-            Vector start = new Vector(
-                center.X + (float)(radius * Math.Cos(a1)),
-                center.Y + (float)(radius * Math.Sin(a1)),
-                center.Z
-            );
-
-            Vector end = new Vector(
-                center.X + (float)(radius * Math.Cos(a2)),
-                center.Y + (float)(radius * Math.Sin(a2)),
-                center.Z
-            );
-
-            beam.Teleport(start);
-            beam.EndPos.X = end.X;
-            beam.EndPos.Y = end.Y;
-            beam.EndPos.Z = end.Z;
-            Utilities.SetStateChanged(beam, "CBeam", "m_vecEndPos");
-        }
-    }
-
 
     public static (CCSPlayerController? Target, float Distance) FindReviveTarget(CCSPlayerController player)
     {
         var g_Main = MainPlugin.Instance.g_Main;
-        int searchRadius = Configs.GetConfigData().Revive_Distance;
+        float maxDist = Configs.GetConfigData().Revive_Distance;
+        float MaxRevive_Distance = maxDist * 1.5f; 
 
         if (!player.IsValid(true) || !player.IsAlive())return (null, float.MaxValue);
 
         var playerPawn = player.PlayerPawn.Value;
         if (playerPawn == null || playerPawn.AbsOrigin == null)return (null, float.MaxValue);
         
-        Vector playerPos = playerPawn.AbsOrigin;
+        My_Vector playerPos = playerPawn.AbsOrigin.ToMy_Vector();
 
         CCSPlayerController? validTarget = null;
         float closestDistance = float.MaxValue;
@@ -578,11 +572,12 @@ public class Helper
 
             var deadPawn = deadplayer.PlayerPawn.Value;
             if (deadPawn == null || deadPawn.AbsOrigin == null)continue;
-            Vector deadPos = deadPawn.AbsOrigin;
+            My_Vector deadPos = deadPawn.AbsOrigin.ToMy_Vector();
 
             float distance = DistanceTo(playerPos, deadPos);
 
-            if (distance <= searchRadius && distance < closestDistance)
+
+            if (distance <= MaxRevive_Distance && distance < closestDistance)
             {
                 validTarget = deadplayer;
                 closestDistance = distance;
@@ -597,21 +592,20 @@ public class Helper
         var g_Main = MainPlugin.Instance.g_Main;
 
         if(!playerreviver.IsValid(true) || !playerdead.IsValid(true) 
-        || !g_Main.Player_Data.TryGetValue(playerreviver, out var dataplayer_reviver) || !g_Main.DeadPlayer_Data.TryGetValue(playerdead, out var dataplayer_dead)
-        || dataplayer_reviver == null || dataplayer_dead == null)return;
+        || !g_Main.Player_Data.TryGetValue(playerreviver, out var dataplayer_reviver) 
+        || !g_Main.DeadPlayer_Data.TryGetValue(playerdead, out var dataplayer_dead)
+        || dataplayer_reviver == null || dataplayer_dead == null) return;
 
+        My_Vector teleportPosition = playerdead.PlayerPawn.Value!.AbsOrigin!.ToMy_Vector();
+        My_QAngle teleportRotation = playerdead.PlayerPawn.Value!.AbsRotation!.ToMy_QAngle();
         
-        var position = playerdead.PlayerPawn.Value?.AbsOrigin;
-        var rotation = playerdead.PlayerPawn.Value?.AbsRotation;
-        var teleportpostion = new Vector(position?.X, position?.Y, position?.Z);
-        var teleportrotation = new QAngle(rotation?.X, rotation?.Y, rotation?.Z);
         playerdead.Respawn();
-        playerdead.PlayerPawn?.Value?.Teleport(teleportpostion, teleportrotation);
+        playerdead.PlayerPawn?.Value.My_Teleport(position: teleportPosition, angles: teleportRotation);
         dataplayer_reviver.TargetPlayer = null!;
         
-        if (playerdead.Pawn.Value != null && playerdead.Pawn.Value.IsValid && playerdead.PlayerPawn?.Value != null && playerdead.PlayerPawn.Value.IsValid)
+        if (playerdead.Pawn.Value != null && playerdead.Pawn.Value.IsValid && playerdead.PlayerPawn?.Value != null)
         {
-            playerdead.Pawn.Value.Health = Configs.GetConfigData().Revive_Health;
+            playerdead.PlayerPawn.Value.Health = Configs.GetConfigData().Revive_Health;
             Utilities.SetStateChanged(playerdead.PlayerPawn.Value, "CBaseEntity", "m_iHealth");
         }
 
@@ -702,13 +696,17 @@ public class Helper
         AnimationEnt.Collision.CollisionGroup = 0;
         AnimationEnt.UseAnimGraph = false;
         AnimationEnt.SetModel(Configs.GetConfigData().Revive_ModelAnimation);
-        AnimationEnt.Teleport(player.PlayerPawn?.Value?.AbsOrigin, player.PlayerPawn?.Value?.AbsRotation);
+
+        My_Vector teleportPosition = player.PlayerPawn!.Value!.AbsOrigin!.ToMy_Vector();
+        My_QAngle teleportRotation = player.PlayerPawn!.Value!.AbsRotation!.ToMy_QAngle();
+
+        AnimationEnt.My_Teleport(teleportPosition, teleportRotation);
 
         var AnimationCloneEnt = Utilities.CreateEntityByName<CDynamicProp>("prop_dynamic");
         if (AnimationCloneEnt == null)return;
         AnimationCloneEnt.DispatchSpawn();
         AnimationCloneEnt.SetModel(orginalmodel);
-        AnimationCloneEnt.Teleport(player.PlayerPawn?.Value?.AbsOrigin, player.PlayerPawn?.Value?.AbsRotation);
+        AnimationCloneEnt.My_Teleport(teleportPosition, teleportRotation);
 
         AnimationCloneEnt.AcceptInput("FollowEntity", AnimationCloneEnt , AnimationEnt , uniqueName);
         AnimationEnt.AcceptInput("SetAnimationNotLooping", null, null, Configs.GetConfigData().Revive_NameAnimation);
@@ -750,23 +748,26 @@ public class Helper
 
     public static void PlayerFreeze(CCSPlayerController player)
     {
-        if (!Configs.GetConfigData().Revive_FreezeOnReviving || !player.IsValid(true)) return;
+        if (!Configs.GetConfigData().Revive_FreezeOnReviving ||
+        player == null || !player.IsValid ||
+        player.Pawn == null || !player.Pawn.IsValid ||
+        player.Pawn.Value == null || !player.Pawn.Value.IsValid ||
+        player.PlayerPawn == null || !player.PlayerPawn.IsValid ||
+        player.PlayerPawn.Value == null || !player.PlayerPawn.Value.IsValid) return;
 
         var g_Main = MainPlugin.Instance.g_Main;
         if (!g_Main.Player_Data.TryGetValue(player, out var data)) return;
 
-        if(Configs.GetConfigData().Revive_DontUnFreezeIfPlayerWasFreezed)
+        if (Configs.GetConfigData().Revive_DontUnFreezeIfPlayerWasFreezed)
         {
             CheckPlayerMovment(player);
-            if(data.Revive_Freeze != 2)return;
+            if (data.Revive_Freeze != 2) return;
         }
 
-        if(player.PlayerPawn.Value!.Flags != 65664 && player.PlayerPawn.Value!.Flags != 65672
-        || player.Pawn.Value!.Flags != 65664 && player.Pawn.Value!.Flags != 65672)
-        {
-            player.Freeze();
-        }
-        
+        if (player.PlayerPawn.Value.Flags == 65664 || player.PlayerPawn.Value.Flags == 65672
+        || player.Pawn.Value.Flags == 65664 || player.Pawn.Value.Flags == 65672) return;
+
+        player.Freeze();
         
     }
     public static void CheckPlayerMovment(CCSPlayerController player)
@@ -789,7 +790,12 @@ public class Helper
     }
     public static void PlayerUNFreeze(CCSPlayerController? player)
     {
-        if (!Configs.GetConfigData().Revive_FreezeOnReviving || !player.IsValid(true)) return;
+        if (!Configs.GetConfigData().Revive_FreezeOnReviving ||
+        player == null || !player.IsValid ||
+        player.Pawn == null || !player.Pawn.IsValid ||
+        player.Pawn.Value == null || !player.Pawn.Value.IsValid ||
+        player.PlayerPawn == null || !player.PlayerPawn.IsValid ||
+        player.PlayerPawn.Value == null || !player.PlayerPawn.Value.IsValid) return;
 
         var g_Main = MainPlugin.Instance.g_Main;
         if (!g_Main.Player_Data.TryGetValue(player, out var data)) return;
@@ -800,11 +806,10 @@ public class Helper
             if(data.Revive_Freeze == 1)return;
         }
 
-        if(player.PlayerPawn.Value!.Flags != 65664 && player.PlayerPawn.Value!.Flags != 65672
-        || player.Pawn.Value!.Flags != 65664 && player.Pawn.Value!.Flags != 65672)
-        {
-            player.Unfreeze();
-        }
+        if (player.PlayerPawn.Value.Flags == 65664 || player.PlayerPawn.Value.Flags == 65672
+        || player.Pawn.Value.Flags == 65664 || player.Pawn.Value.Flags == 65672) return;
+
+        player.Unfreeze();
     }
 
     public static void CreatePointWorldTextPoint(CCSPlayerController player)
@@ -834,9 +839,17 @@ public class Helper
         entity.ReorientMode = PointWorldTextReorientMode_t.POINT_WORLD_TEXT_REORIENT_AROUND_UP;
         entity.DispatchSpawn();
 
-        float zOffset = Configs.GetConfigData().DeadBody_MovePlayerNameText_From_Ground_By;
-        Vector elevatedCenter = new Vector(player.PlayerPawn?.Value?.AbsOrigin?.X, player.PlayerPawn?.Value?.AbsOrigin?.Y, player.PlayerPawn?.Value?.AbsOrigin?.Z + zOffset);
-        entity.Teleport(elevatedCenter, new QAngle(0, 90, 90));
+        My_Vector Teleport = player.PlayerPawn.Value!.AbsOrigin!.ToMy_Vector();
+        Teleport.Z += Configs.GetConfigData().DeadBody_MovePlayerNameText_From_Ground_By;
+
+        My_QAngle Rotation = player.PlayerPawn.Value!.AbsRotation!.ToMy_QAngle();
+        Rotation.Y += 90f;
+        Rotation.Z += 90f;
+        
+        entity.My_Teleport(Teleport, Rotation);
+        entity.AcceptInput("FollowEntity", entity , null! , "");
+        
+
         data.PointWorldTextPoint = entity;
     }
 
@@ -847,8 +860,12 @@ public class Helper
         float radius = Configs.GetConfigData().Revive_Distance;
         int pointCount = 100;
 
-        float zOffset = Configs.GetConfigData().DeadBody_MoveCircleRadius_From_Ground_By;
-        Vector elevatedCenter = new Vector(player.PlayerPawn?.Value?.AbsOrigin?.X, player.PlayerPawn?.Value?.AbsOrigin?.Y, player.PlayerPawn?.Value?.AbsOrigin?.Z + zOffset);
+        
+        My_Vector point = player.PlayerPawn.Value!.AbsOrigin!.ToMy_Vector();
+        point.Z += Configs.GetConfigData().DeadBody_MoveCircleRadius_From_Ground_By;
+
+        My_Vector start = default;
+        My_Vector end = default;
 
         for (int i = 0; i < pointCount; i++)
         {
@@ -857,26 +874,23 @@ public class Helper
             double angle1 = i * (2 * Math.PI / pointCount);
             double angle2 = (i + 1) * (2 * Math.PI / pointCount);
 
-            Vector start = new Vector(
-                elevatedCenter.X + (float)(radius * Math.Cos(angle1)),
-                elevatedCenter.Y + (float)(radius * Math.Sin(angle1)),
-                elevatedCenter.Z
-            );
+            start.X = point.X + (float)(radius * Math.Cos(angle1));
+            start.Y = point.Y + (float)(radius * Math.Sin(angle1));
+            start.Z = point.Z;
 
-            Vector end = new Vector(
-                elevatedCenter.X + (float)(radius * Math.Cos(angle2)),
-                elevatedCenter.Y + (float)(radius * Math.Sin(angle2)),
-                elevatedCenter.Z
-            );
+            end.X = point.X + (float)(radius * Math.Cos(angle2));
+            end.Y = point.Y + (float)(radius * Math.Sin(angle2));
+            end.Z = point.Z;
 
             CreateBeamBetweenPoints(player, start, end);
         }
+        
     }
 
-    public static CBeam CreateBeamBetweenPoints(CCSPlayerController? player, Vector start, Vector end)
+    public static CBeam CreateBeamBetweenPoints(CCSPlayerController? player, My_Vector start, My_Vector end)
     {
         var g_Main = MainPlugin.Instance.g_Main;
-        if(!player.IsValid(true) || !g_Main.DeadPlayer_Data.TryGetValue(player, out var data))return null!;
+        if(!player.IsValid(true) || !g_Main.DeadPlayer_Data.TryGetValue(player, out var data)) return null!;
 
         CBeam beam = Utilities.CreateEntityByName<CBeam>("beam")!;
         if (beam == null) return null!;
@@ -885,22 +899,29 @@ public class Helper
         beam.Width = 3.0f;
         beam.EndWidth = 3.0f;
 
-        beam.Teleport(start);
+        beam.My_Teleport(position: start);
+        
         beam.EndPos.X = end.X;
         beam.EndPos.Y = end.Y;
         beam.EndPos.Z = end.Z;
+        
         beam.DispatchSpawn();
         data.CircleBeam.Add(beam);
+        beam.AcceptInput("FollowEntity", beam, null!, "");
         return beam;
     }
 
     public static CBeam CreateVerticalLineBeam(CCSPlayerController? player)
     {
         var g_Main = MainPlugin.Instance.g_Main;
-        if (!Configs.GetConfigData().DeadBody_Arrow || !player.IsValid(true) || !g_Main.DeadPlayer_Data.TryGetValue(player, out var data))return null!;
+        if (Configs.GetConfigData().DeadBody_Arrow == 0 || !player.IsValid(true) || !g_Main.DeadPlayer_Data.TryGetValue(player, out var data)) return null!;
 
-        Vector basePos = new Vector(player.PlayerPawn?.Value?.AbsOrigin?.X, player.PlayerPawn?.Value?.AbsOrigin?.Y, player.PlayerPawn?.Value?.AbsOrigin?.Z + Configs.GetConfigData().DeadBody_MoveArrow_From_Ground_By);
-        Vector tip0    = new Vector(basePos.X,   basePos.Y,   basePos.Z + 50);
+        
+        My_Vector basePos = player.PlayerPawn.Value!.AbsOrigin!.ToMy_Vector();
+        basePos.Z += Configs.GetConfigData().DeadBody_MoveArrow_From_Ground_By;
+        
+        My_Vector tip0 = basePos;
+        tip0.Z += 50;
 
         var line = Utilities.CreateEntityByName<CBeam>("beam")!;
         line.BeamType = BeamType_t.BEAM_POINTS;
@@ -909,11 +930,14 @@ public class Helper
         line.Render = Configs.GetConfigData().DeadBody_Arrow_Color.ToColor();
         line.RenderMode = RenderMode_t.kRenderTransAdd;
 
-        line.Teleport(basePos);
+        line.My_Teleport(position: basePos);
+        
         line.EndPos.X = tip0.X;
         line.EndPos.Y = tip0.Y;
         line.EndPos.Z = tip0.Z;
+        
         line.DispatchSpawn();
+        line.AcceptInput("FollowEntity", line, null!, "");
 
         data.LineBeam = line;
         data.LineBeam_Time = DateTime.Now;
@@ -923,36 +947,51 @@ public class Helper
         return line;
     }
 
-    private static void CreateArrowHead(Vector origin, Globals.DeadPlayerDataClass data)
+    private const float cons_wing = 20f; 
+    private static void CreateArrowHead(My_Vector origin, Globals.DeadPlayerDataClass data)
     {
-        const float wingSpread = 20f;  
-        const float wingDrop   = 20f;  
 
-        var dirs = new[]
-        {
-            new Vector( wingSpread, 0, +wingDrop),
-            new Vector(-wingSpread, 0, +wingDrop)
-        };
+        float wing1X = origin.X + cons_wing;
+        float wing2X = origin.X - cons_wing;
+        float wingY = origin.Y;
+        float wingZ = origin.Z + cons_wing;
 
         var arrows = new List<CBeam>(2);
-        foreach (var d in dirs)
-        {
-            var wing = Utilities.CreateEntityByName<CBeam>("beam")!;
-            wing.BeamType = BeamType_t.BEAM_POINTS;
-            wing.Width = 2f;
-            wing.EndWidth = 2f;
-            wing.Render = Configs.GetConfigData().DeadBody_Arrow_Color.ToColor();
-            wing.RenderMode = RenderMode_t.kRenderTransAdd;
 
-            wing.Teleport(origin);
-            wing.EndPos.X = origin.X + d.X;
-            wing.EndPos.Y = origin.Y + d.Y;
-            wing.EndPos.Z = origin.Z + d.Z;
-            wing.DispatchSpawn();
+        var wing1 = Utilities.CreateEntityByName<CBeam>("beam")!;
+        wing1.BeamType = BeamType_t.BEAM_POINTS;
+        wing1.Width = 2f;
+        wing1.EndWidth = 2f;
+        wing1.Render = Configs.GetConfigData().DeadBody_Arrow_Color.ToColor();
+        wing1.RenderMode = RenderMode_t.kRenderTransAdd;
 
-            Utilities.SetStateChanged(wing, "CBeam", "m_vecEndPos");
-            arrows.Add(wing);
-        }
+        wing1.My_Teleport(position: origin);
+        wing1.EndPos.X = wing1X;
+        wing1.EndPos.Y = wingY;
+        wing1.EndPos.Z = wingZ;
+
+        wing1.DispatchSpawn();
+        wing1.AcceptInput("FollowEntity", wing1, null!, "");
+        arrows.Add(wing1);
+
+        var wing2 = Utilities.CreateEntityByName<CBeam>("beam")!;
+        wing2.BeamType = BeamType_t.BEAM_POINTS;
+        wing2.Width = 2f;
+        wing2.EndWidth = 2f;
+        wing2.Render = Configs.GetConfigData().DeadBody_Arrow_Color.ToColor();
+        wing2.RenderMode = RenderMode_t.kRenderTransAdd;
+
+        wing2.My_Teleport(position: origin);
+        wing2.EndPos.X = wing2X;
+        wing2.EndPos.Y = wingY;
+        wing2.EndPos.Z = wingZ;
+
+        wing2.DispatchSpawn();
+        wing2.AcceptInput("FollowEntity", wing2, null!, "");
+        arrows.Add(wing2);
+
+        Utilities.SetStateChanged(wing1, "CBeam", "m_vecEndPos");
+        Utilities.SetStateChanged(wing2, "CBeam", "m_vecEndPos");
         data.ArrowBeam = arrows;
     }
 

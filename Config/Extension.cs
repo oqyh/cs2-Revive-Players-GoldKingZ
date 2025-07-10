@@ -5,12 +5,13 @@ using CounterStrikeSharp.API.Modules.Utils;
 using System.Drawing;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API;
+using System.Collections.Concurrent;
 
 namespace Revive_Players;
 
 public static class Extension
 {
-    public static bool IsValid([NotNullWhen(true)] this CCSPlayerController? player, bool IncludeBots = false, bool IncludeHLTV  = false)
+    public static bool IsValid([NotNullWhen(true)] this CCSPlayerController? player, bool IncludeBots = false, bool IncludeHLTV = false)
     {
         if (player == null || !player.IsValid)
             return false;
@@ -26,27 +27,48 @@ public static class Extension
 
     public static bool IsAlive(this CCSPlayerController? player)
     {
-        if(!player.IsValid(true))return false;
+        if (player == null || !player.IsValid
+        || player.PlayerPawn == null || !player.PlayerPawn.IsValid
+        || player.PlayerPawn.Value == null || !player.PlayerPawn.Value.IsValid) return false;
 
-        return player.PlayerPawn.Value?.LifeState == (byte)LifeState_t.LIFE_ALIVE;
+        return player.PlayerPawn.Value.LifeState == (byte)LifeState_t.LIFE_ALIVE;
     }
 
     public static void Freeze(this CCSPlayerController? player)
     {
-        if(!player.IsValid(true) || !player.IsAlive())return;
+        if (player == null || !player.IsValid
+        || player.PlayerPawn == null || !player.PlayerPawn.IsValid
+        || player.PlayerPawn.Value == null || !player.PlayerPawn.Value.IsValid
+        || !player.IsAlive()) return;
 
-        player.PlayerPawn.Value!.MoveType = MoveType_t.MOVETYPE_NONE;
-        Schema.SetSchemaValue(player.PlayerPawn.Value!.Handle, "CBaseEntity", "m_nActualMoveType", 0);
-        Utilities.SetStateChanged(player.PlayerPawn.Value!, "CBaseEntity", "m_MoveType");
+        player.PlayerPawn.Value.MoveType = MoveType_t.MOVETYPE_NONE;
+        Schema.SetSchemaValue(player.PlayerPawn.Value.Handle, "CBaseEntity", "m_nActualMoveType", 0);
+        Utilities.SetStateChanged(player.PlayerPawn.Value, "CBaseEntity", "m_MoveType");
     }
 
     public static void Unfreeze(this CCSPlayerController? player)
     {
-        if(!player.IsValid(true) || !player.IsAlive())return;
+        if (player == null || !player.IsValid
+        || player.PlayerPawn == null || !player.PlayerPawn.IsValid
+        || player.PlayerPawn.Value == null || !player.PlayerPawn.Value.IsValid
+        || !player.IsAlive()) return;
 
-        player.PlayerPawn.Value!.MoveType = MoveType_t.MOVETYPE_WALK;
-        Schema.SetSchemaValue(player.PlayerPawn.Value!.Handle, "CBaseEntity", "m_nActualMoveType", 2);
-        Utilities.SetStateChanged(player.PlayerPawn.Value!, "CBaseEntity", "m_MoveType");
+        player.PlayerPawn.Value.MoveType = MoveType_t.MOVETYPE_WALK;
+        Schema.SetSchemaValue(player.PlayerPawn.Value.Handle, "CBaseEntity", "m_nActualMoveType", 2);
+        Utilities.SetStateChanged(player.PlayerPawn.Value, "CBaseEntity", "m_MoveType");
+    }
+
+    private const ulong Steam64Offset = 76561197960265728UL;
+    public static (string steam2, string steam3, string steam32, string steam64) GetPlayerSteamID(this ulong steamId64)
+    {
+        uint id32 = (uint)(steamId64 - Steam64Offset);
+        var steam32 = id32.ToString();
+        uint y = id32 & 1;
+        uint z = id32 >> 1;
+        var steam2 = $"STEAM_0:{y}:{z}";
+        var steam3 = $"[U:1:{steam32}]";
+        var steam64 = steamId64.ToString();
+        return (steam2, steam3, steam32, steam64);
     }
 
     public static Color ToColor(this string colorString)
@@ -113,6 +135,4 @@ public static class Extension
         }
         return Color.FromArgb(a, r, g, b);
     }
-
-    
 }
