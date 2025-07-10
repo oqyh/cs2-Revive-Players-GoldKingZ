@@ -2,7 +2,7 @@
 
 <a href="https://discord.com/invite/U7AuQhu"><img src="https://discord.com/api/guilds/651838917687115806/widget.png?style=banner2"></a>
 
-# [CS2] Revive-Players-GoldKingZ (1.0.0)
+# [CS2] Revive-Players-GoldKingZ (1.0.1)
 
 Allow To Revive Players With Flags
 
@@ -57,9 +57,9 @@ Allow To Revive Players With Flags
 | `Revive_NameAnimation` | Animation name | String, `""` = Disabled | - |
 | `Revive_FreezeOnReviving` | Freeze during revive | `true`/`false` | - |
 | `Revive_DontUnFreezeIfPlayerWasFreezed` | Preserve original freeze | `true`/`false` | - |
-| `DeadBody_Arrow` | Show indicator arrow | `true`/`false` | - |
-| `DeadBody_Arrow_Color` | Arrow color | RGBA values (e.g., `"120,245,27,0.45"`) | `DeadBody_Arrow=true` |
-| `DeadBody_MoveArrow_From_Ground_By` | Arrow height offset | Number (units) | `DeadBody_Arrow=true` |
+| `DeadBody_Arrow` | Show indicator arrow | `0` = No, `1` = Yes + No Animation, `2` = Yes + Animation | - |
+| `DeadBody_Arrow_Color` | Arrow color | RGBA values (e.g., `"120,245,27,0.45"`) | `DeadBody_Arrow > 0` |
+| `DeadBody_MoveArrow_From_Ground_By` | Arrow height offset | Number (units) | `DeadBody_Arrow > 0` |
 | `DeadBody_CircleRadius` | Show circle radius | `true`/`false` | - |
 | `DeadBody_CircleRadius_Color` | Circle color | RGBA values | `DeadBody_CircleRadius=true` |
 | `DeadBody_MoveCircleRadius_From_Ground_By` | Circle height offset | Number (units) | `DeadBody_CircleRadius=true` |
@@ -90,6 +90,14 @@ Allow To Revive Players With Flags
 
 <details>
 <summary><b>📋 View Version History</b> (Click to expand 🔽)</summary>
+
+### [1.0.1]
+- Fix Memory Leak
+- Fix Revive_Flags CounterStrikeSharp Excluding Root By Default
+- Fix Revive_Immunity_From_Cooldown_Flags CounterStrikeSharp Excluding Root By Default
+- Fix DeadBody_Arrow  
+- Fix "PrintChatToPlayer.Revive.Too.Far" Not Printed 
+- Added DeadBody_Arrow = 1 or 2 For Animation On/Off
 
 ### [1.0.0]
 - Initial plugin release
