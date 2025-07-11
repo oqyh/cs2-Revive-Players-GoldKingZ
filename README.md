@@ -2,7 +2,7 @@
 
 <a href="https://discord.com/invite/U7AuQhu"><img src="https://discord.com/api/guilds/651838917687115806/widget.png?style=banner2"></a>
 
-# [CS2] Revive-Players-GoldKingZ (1.0.1)
+# [CS2] Revive-Players-GoldKingZ (1.0.2)
 
 Allow To Revive Players With Flags
 
@@ -90,6 +90,9 @@ Allow To Revive Players With Flags
 
 <details>
 <summary><b>📋 View Version History</b> (Click to expand 🔽)</summary>
+
+### [1.0.2]
+- Fix Bug While Reviving Get Shot Reviver Will Get Freeze
 
 ### [1.0.1]
 - Fix Memory Leak
