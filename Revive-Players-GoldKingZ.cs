@@ -20,7 +20,7 @@ namespace Revive_Players;
 public class MainPlugin : BasePlugin
 {
     public override string ModuleName => "Allow To Revive Players With Flags";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => "1.0.2";
     public override string ModuleAuthor => "Gold KingZ";
     public override string ModuleDescription => "https://github.com/oqyh";
     public static MainPlugin Instance { get; set; } = new();
@@ -341,6 +341,15 @@ public class MainPlugin : BasePlugin
                     else
                     {
                         if(playerData.TargetPlayer != null && target != playerData.TargetPlayer)continue;
+
+                        if (!Helper.CanPlayerRevive(player, playerData))
+                        {
+                            playerData.ButtonReady = false;
+                            playerData.Reviving = false;
+                            playerData.TargetPlayer = null!;
+                            Helper.ResetPlayer(player);
+                            continue;
+                        }
                         
                         StringBuilder builder = new StringBuilder();
                         double elapsed = (DateTime.Now - playerData.HoldStartTime).TotalSeconds;
